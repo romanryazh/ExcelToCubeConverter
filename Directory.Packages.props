@@ -1,0 +1,8 @@
+<Project>
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally> 
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageVersion Include="EPPlus" Version="8.5.4" />
+    </ItemGroup>
+</Project>

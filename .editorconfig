@@ -1,0 +1,5 @@
+[*.cs]
+
+dotnet_diagnostic.CA1812.severity = none
+dotnet_diagnostic.CA1852.severity = none
+dotnet_diagnostic.CA1591.severity = warning
