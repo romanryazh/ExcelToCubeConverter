@@ -69,6 +69,8 @@ public class YamlGenerator
 			"MIN" => ", мин",
 			"MAX" => ", макс",
 			"AVG" => ", средн",
+			"SUM" => ", сум",
+			"COUNT" => ", кол-во",
 			_ => string.Empty
 		};
 	}
