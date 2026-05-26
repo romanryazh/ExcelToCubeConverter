@@ -2,4 +2,7 @@
     <ItemGroup>
         <PackageReference Include="EPPlus"/>
     </ItemGroup>
+    <ItemGroup>
+      <Folder Include="Extensions\" />
+    </ItemGroup>
 </Project>
