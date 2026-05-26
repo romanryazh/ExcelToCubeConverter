@@ -1,132 +1,82 @@
-﻿using System.Text;
-using System.Text.RegularExpressions;
-using ExcelToCubeConverter.Core;
-using OfficeOpenXml;
+﻿using System.Text.Json;
+using ExcelToCubeConverter.Core.Mapping;
+using ExcelToCubeConverter.Core.Models;
+using ExcelToCubeConverter.Core.Models.Settings;
+using ExcelToCubeConverter.Core.Services;
 
-const string excelPath = @"D:\DM_QES_ROLL_UP_PARAM_HRM2.xlsx";
-const string outputPath = @"D:\DM_QES_ROLL_UP_PARAM_HRM2.yaml";
+Console.WriteLine("+--------------------------------------------------+");
+Console.WriteLine("|    Вы используете Excel To CubeJS Converter      |");
+Console.WriteLine("+--------------------------------------------------+");
 
-if (!File.Exists(excelPath))
+const string settingsFileName = "appsettings.json";
+
+if (!File.Exists(settingsFileName))
 {
-	Console.WriteLine($"Excel файл {excelPath} не найден");
-	return 1;
+	Console.WriteLine("Ошибка: Не удалось загрузить файл appsettings.json.");
+	Console.WriteLine("Причина: Файл настроек не найден.");
+
+	return;
 }
+
+AppSettings? settings;
 
 try
 {
-	Console.WriteLine("Начало конвертации...");
-	Convert(excelPath, outputPath);
+	var settingsJson = File.ReadAllText(settingsFileName);
 
-	Console.WriteLine("Конвертация завершена");
-
-	Console.WriteLine($"Файл сохранён: {outputPath}");
-	return 0;
+	settings = JsonSerializer.Deserialize<AppSettings>(settingsJson);
 }
-catch (Exception exception)
+catch (Exception ex)
 {
-	Console.WriteLine($"Ошибка: {exception.Message}");
-	return 1;
+	Console.WriteLine($"Ошибка: {ex.Message}");
+
+	return;
 }
 
-void Convert(string excelFilePath, string outPath)
+if (settings == null)
 {
-	ExcelPackage.License.SetNonCommercialPersonal("Mee");
+	Console.WriteLine("Ошибка: Не удалось загрузить файл appsettings.json.");
 
-	using var package = new ExcelPackage(new FileInfo(excelFilePath));
-
-	var worksheet = package.Workbook.Worksheets[0];
-
-	var fields = ParseExcel(worksheet);
-
-	var yaml = GenerateYaml(fields);
-
-	File.WriteAllText(outPath, yaml, Encoding.UTF8);
+	return;
 }
 
-List<FieldInfo> ParseExcel(ExcelWorksheet worksheet)
+Console.WriteLine("Процесс: Чтение Excel файла...");
+
+var rawRows = ExcelReader.Read(settings.Excel.FilePath, settings.Excel.WorksheetIndex, settings.Excel.DataStartRow);
+
+Console.WriteLine($"Результат: Считано строк: {rawRows.Count}");
+
+var excelRows = new List<ExcelRow>();
+
+var rowNumber = settings.Excel.DataStartRow;
+
+foreach (var row in rawRows)
 {
-	var fields = new List<FieldInfo>();
+	var mappedRow = ExcelRowMapper.Map(row, rowNumber);
 
-	// Console.WriteLine(worksheet.Cells[2, 1].Text.Trim());
+	excelRows.Add(mappedRow);
 
-	for (var row = 3; row <= worksheet.Dimension.Rows; row++)
-	{
-		var cubeName = worksheet.Cells[row, 1]
-								.Text.Trim();
-		cubeName = CleanName(cubeName);
-
-		if (string.IsNullOrEmpty(cubeName))
-		{
-			continue;
-		}
-
-		var field = new FieldInfo()
-		{
-			CubeName = cubeName,
-			FieldName = worksheet.Cells[row, 2]
-								 .Text.Trim(),
-			SqlColumn = cubeName,
-			DataType = worksheet.Cells[row, 3]
-								.Text.Trim(),
-			IsMetric = worksheet.Cells[row, 4]
-								.Text.Trim() ==
-					   "Metric",
-			Aggregation = worksheet.Cells[row, 5]
-								   .Text.Trim()
-								   .ToUpper(),
-		};
-
-		if (field.DataType.StartsWith("number"))
-		{
-			field.DataType = "number";
-		}
-		else if (field.DataType.StartsWith("date"))
-		{
-			field.DataType = "time";
-		}
-		else if (field.DataType.StartsWith("varchar"))
-		{
-			field.DataType = "string";
-		}
-		else
-		{
-			throw new Exception("FFFFFFFF");
-		}
-
-		fields.Add(field);
-	}
-
-	return fields;
+	rowNumber++;
 }
 
-string GenerateYaml(List<FieldInfo> fields)
+Console.WriteLine("Процесс: Построение кубов...");
+
+var cubes = CubeBuilder.Build(excelRows, settings.Cube.DataSource);
+
+Console.WriteLine($"Инфо: Найдено кубов: {cubes.Count}");
+
+foreach (var cube in cubes)
 {
-	var resultString = new StringBuilder();
+	Console.WriteLine($"Процесс: Генерация YAML: {cube.Name}");
+	
+	var yaml = YamlGenerator.Generate(cube);
 
-	resultString.AppendLine($"cubes:");
-	resultString.AppendLine($"  - name: DM_QES_ROLL_UP_PARAM_HRM2");
-	resultString.AppendLine($"    title: Скалярные значения с уборочной группы ЛПЦ-2");
-	resultString.AppendLine($"    data_source: qesdm");
-	resultString.AppendLine($"    sql_table: DM_QES_FUR_PARAM_HRM2");
-	resultString.AppendLine();
+	var outputPath = settings.Cube.OutputPath;
+	
+	FileWriter.Write(outputPath, yaml);
 
-	foreach (var field in fields)
-	{
-		if (field.IsMetric)
-		{
-			resultString.AppendLine($"    measures:");
-		}
-	}
-
-	return resultString.ToString();
+	Console.WriteLine($"Результат: Файл сохранён: {outputPath}");
 }
 
-string CleanName(string name)
-{
-	name = Regex.Replace(name, @"[^a-zA-Z0-9_]", "_");
-	name = Regex.Replace(name, @"_+", "_");
-	name = name.Trim('_');
-
-	return name.ToUpper();
-}
-
+Console.WriteLine();
+Console.WriteLine("Готово.");
